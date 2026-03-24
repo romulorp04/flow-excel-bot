@@ -3,18 +3,22 @@ Automação real de consulta ao CREA-MG via Selenium.
 
 URL: https://crea-mg.sitac.com.br/app/view/sight/externo.php?form=PesquisarProfissionalEmpresa
 
-Fluxo:
-  1. Acessa a página de pesquisa
-  2. Valida se chegou na página correta (sem redirect/bloqueio)
-  3. Preenche o campo CPF
-  4. Clica em "Pesquisar" (é um <a> com id=PESQUISAR)
-  5. Aguarda div #pesquisa_result ficar visível
-  6. Extrai dados da tabela dentro de #Result_pesquisa
+Página real (confirmada por inspeção do HTML):
+  - Campo CPF: <input id="CPF" name="CPF" type="text">
+  - Botão Pesquisar: <a id="PESQUISAR" class="cad_form_txf botao_informacao">
+  - Resultado: <div id="pesquisa_result"> fica display:none até resultado carregar
+  - Conteúdo resultado: <div id="Result_pesquisa">
+  - Overlay loading: <div id="ajax-overlay">
+  - reCAPTCHA invisível v2 presente (chave 6Lf9gp8U...)
 
-NOTA: A página usa reCAPTCHA invisível (v2). Em modo headless com
-configurações stealth, o reCAPTCHA invisível geralmente é resolvido
-automaticamente. Se começar a bloquear, será necessário integrar
-um serviço de resolução de captcha.
+Fluxo:
+  1. Acessa URL
+  2. Valida se chegou na página correta (detecta redirect/bloqueio)
+  3. Localiza campo #CPF
+  4. Preenche CPF
+  5. Clica no <a id="PESQUISAR"> (com fallback JS click)
+  6. Aguarda #pesquisa_result ficar visível
+  7. Extrai dados de #Result_pesquisa
 """
 
 import time
@@ -28,257 +32,211 @@ from selenium.common.exceptions import (
 )
 from automacao.browser import criar_driver
 
-URL_CREA = "https://crea-mg.sitac.com.br/app/view/sight/externo.php?form=PesquisarProfissionalEmpresa"
+URL_CREA = (
+    "https://crea-mg.sitac.com.br/app/view/sight/externo.php"
+    "?form=PesquisarProfissionalEmpresa"
+)
 
-# Indicadores de página de bloqueio / redirect indesejado
-PAGINAS_BLOQUEIO = ["updatebrowser", "blocked", "captcha", "access denied", "403"]
+TERMOS_BLOQUEIO = ["updatebrowser", "blocked", "access denied", "403 forbidden"]
 
 
 def consultar_crea_mg(cpf: str) -> dict:
-    """Executa consulta real no CREA-MG e retorna resultado com logs detalhados."""
+    """Executa consulta real no CREA-MG. Retorna dict com dados + logs detalhados."""
     logs: list[str] = []
     etapa = "inicializacao"
-    url_inicial = URL_CREA
     url_final = URL_CREA
     driver = None
 
     try:
-        # --- Etapa 1: Criar driver ---
+        # ── 1. Criar driver ──────────────────────────────────
         etapa = "criar_driver"
         logs.append("Criando Chrome headless...")
         driver = criar_driver(headless=True)
-        logs.append("Driver criado.")
+        logs.append("✓ Driver criado.")
 
-        # --- Etapa 2: Acessar página ---
+        # ── 2. Acessar página ────────────────────────────────
         etapa = "acessar_pagina"
-        logs.append(f"Acessando: {URL_CREA}")
+        logs.append(f"URL inicial: {URL_CREA}")
         driver.get(URL_CREA)
         url_final = driver.current_url
-        titulo_pagina = driver.title
+        titulo = driver.title or "(sem título)"
         logs.append(f"URL final: {url_final}")
-        logs.append(f"Título: {titulo_pagina}")
+        logs.append(f"Título: {titulo}")
 
-        # --- Etapa 3: Detectar redirect / bloqueio ---
+        # ── 3. Detectar redirect / bloqueio ──────────────────
         etapa = "validar_pagina"
-        if url_final != URL_CREA:
-            logs.append(f"⚠ REDIRECIONAMENTO detectado: {URL_CREA} → {url_final}")
+        if url_final.split("?")[0] != URL_CREA.split("?")[0]:
+            logs.append(f"⚠ REDIRECIONAMENTO: {URL_CREA} → {url_final}")
 
-        page_lower = driver.page_source[:2000].lower()
-        for termo in PAGINAS_BLOQUEIO:
-            if termo in page_lower or termo in url_final.lower():
-                logs.append(f"⛔ Página de bloqueio detectada ('{termo}')")
-                return _erro(cpf, f"Página bloqueada/redirecionada ({termo}). URL final: {url_final}", etapa, url_final, logs)
+        snippet = driver.page_source[:3000].lower()
+        for termo in TERMOS_BLOQUEIO:
+            if termo in snippet or termo in url_final.lower():
+                logs.append(f"⛔ Bloqueio detectado: '{termo}'")
+                return _erro(
+                    cpf,
+                    f"Página bloqueada/redirecionada ({termo}). URL: {url_final}",
+                    etapa, url_final, logs,
+                )
 
-        # Validar que é a página de pesquisa real
-        if "pesquisarprofissionalempresa" not in url_final.lower().replace(" ", "") and "pesquisar" not in page_lower:
-            logs.append("⚠ Página não parece ser o formulário de pesquisa do CREA-MG.")
-            body_snippet = driver.find_element(By.TAG_NAME, "body").text[:500]
-            logs.append(f"Conteúdo: {body_snippet}")
-            return _erro(cpf, "Página carregada não é o formulário de pesquisa esperado.", etapa, url_final, logs)
+        # Validar que é a página de pesquisa
+        if "pesquisarprofissionalempresa" not in url_final.lower().replace(" ", ""):
+            if "pesquisar" not in snippet:
+                logs.append("⛔ Não é a página de pesquisa do CREA-MG.")
+                body_text = driver.find_element(By.TAG_NAME, "body").text[:500]
+                logs.append(f"Conteúdo: {body_text}")
+                return _erro(cpf, "Página carregada não é o formulário de pesquisa.", etapa, url_final, logs)
 
         logs.append("✓ Página de pesquisa validada.")
 
-        # --- Etapa 4: Localizar campo CPF (#CPF) ---
+        # ── 4. Localizar campo CPF ───────────────────────────
         etapa = "localizar_campo_cpf"
-        logs.append("Procurando campo CPF (#CPF)...")
-        try:
-            campo_cpf = WebDriverWait(driver, 15).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "#CPF"))
-            )
-            logs.append("✓ Campo #CPF encontrado.")
-        except TimeoutException:
-            # Alternativas
-            logs.append("#CPF não encontrado. Tentando seletores alternativos...")
-            campo_cpf = None
-            for sel in ["input[name='CPF']", "input[name='cpf']", "input[id='CPF']"]:
-                try:
-                    campo_cpf = driver.find_element(By.CSS_SELECTOR, sel)
-                    logs.append(f"✓ Campo CPF encontrado via: {sel}")
-                    break
-                except NoSuchElementException:
-                    continue
-            if campo_cpf is None:
-                logs.append(f"✗ Nenhum campo CPF na página. Título: {titulo_pagina}")
-                return _erro(cpf, "Campo CPF não encontrado na página.", etapa, url_final, logs)
+        logs.append("Procurando campo #CPF...")
+        campo_cpf = _encontrar_elemento(
+            driver, 15,
+            ["#CPF", "input[name='CPF']", "input[name='cpf']"],
+            logs,
+        )
+        if campo_cpf is None:
+            logs.append(f"✗ Campo CPF não encontrado. Título: {titulo}")
+            return _erro(cpf, "Campo CPF não encontrado na página.", etapa, url_final, logs)
+        logs.append("✓ Campo CPF encontrado.")
 
-        # --- Etapa 5: Preencher CPF ---
+        # ── 5. Preencher CPF ─────────────────────────────────
         etapa = "preencher_cpf"
         campo_cpf.clear()
         campo_cpf.send_keys(cpf)
         time.sleep(0.3)
-        valor_preenchido = campo_cpf.get_attribute("value")
-        logs.append(f"✓ CPF preenchido: {valor_preenchido}")
+        valor = campo_cpf.get_attribute("value") or ""
+        logs.append(f"✓ CPF preenchido: {valor}")
 
-        # --- Etapa 6: Clicar em Pesquisar ---
-        # O botão é um <a id="PESQUISAR" class="... botao_informacao">
+        # ── 6. Clicar Pesquisar ──────────────────────────────
+        # É um <a id="PESQUISAR" class="... botao_informacao">
         etapa = "clicar_pesquisar"
-        logs.append("Procurando botão Pesquisar (#PESQUISAR)...")
+        logs.append("Procurando botão #PESQUISAR...")
+        btn = _encontrar_elemento(
+            driver, 10,
+            ["#PESQUISAR", "a#PESQUISAR", "a.botao_informacao"],
+            logs,
+        )
+        if btn is None:
+            # Tentar XPath por texto
+            try:
+                btn = driver.find_element(By.XPATH, "//a[contains(text(),'Pesquisar')]")
+                logs.append("✓ Botão encontrado via XPath texto.")
+            except NoSuchElementException:
+                logs.append("✗ Botão Pesquisar não encontrado.")
+                return _erro(cpf, "Botão Pesquisar não encontrado.", etapa, url_final, logs)
+
+        tag = btn.tag_name
+        logs.append(f"✓ Botão encontrado (<{tag}>). Clicando...")
+
         try:
-            btn = WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "#PESQUISAR"))
-            )
-            tag_name = btn.tag_name
-            logs.append(f"✓ Botão encontrado (<{tag_name}> id=PESQUISAR). Clicando...")
             btn.click()
-        except TimeoutException:
-            logs.append("#PESQUISAR não clicável. Tentando alternativas...")
-            clicou = False
-            for sel in ["a#PESQUISAR", "a.botao_informacao", "#PESQUISAR"]:
+            logs.append("✓ Click nativo executado.")
+        except Exception:
+            logs.append("Click nativo falhou. Tentando via JS...")
+            driver.execute_script("arguments[0].click();", btn)
+            logs.append("✓ Click via JS executado.")
+
+        # ── 7. Aguardar resultado ────────────────────────────
+        etapa = "aguardar_resultado"
+        logs.append("Aguardando resultado (#pesquisa_result)...")
+
+        # Esperar overlay sumir e resultado aparecer
+        resultado_apareceu = False
+        for tentativa in range(1, 4):
+            try:
+                WebDriverWait(driver, 10).until(
+                    lambda d: (
+                        d.find_element(By.CSS_SELECTOR, "#pesquisa_result")
+                        .value_of_css_property("display") != "none"
+                    )
+                )
+                resultado_apareceu = True
+                logs.append(f"✓ #pesquisa_result visível (tentativa {tentativa}).")
+                break
+            except TimeoutException:
+                logs.append(f"Tentativa {tentativa}: #pesquisa_result ainda oculto.")
+                # Verificar se overlay ainda carregando
                 try:
-                    el = driver.find_element(By.CSS_SELECTOR, sel)
-                    driver.execute_script("arguments[0].click();", el)
-                    clicou = True
-                    logs.append(f"✓ Clicado via JS: {sel}")
-                    break
-                except Exception:
-                    continue
-            if not clicou:
-                # Tentar submit do form
-                try:
-                    driver.execute_script("document.getElementById('form').submit();")
-                    clicou = True
-                    logs.append("✓ Form submetido via JS.")
+                    overlay = driver.find_element(By.CSS_SELECTOR, "#ajax-overlay")
+                    if overlay.is_displayed():
+                        logs.append("Overlay 'Processando...' ativo, aguardando mais...")
+                        continue
                 except Exception:
                     pass
-            if not clicou:
-                return _erro(cpf, "Botão Pesquisar não encontrado/clicável.", etapa, url_final, logs)
+                break
 
-        # --- Etapa 7: Aguardar resultado ---
-        etapa = "aguardar_resultado"
-        logs.append("Aguardando resultado (div #pesquisa_result)...")
-
-        # A página mostra/esconde #pesquisa_result via display
-        try:
-            WebDriverWait(driver, 25).until(
-                lambda d: d.find_element(By.CSS_SELECTOR, "#pesquisa_result").value_of_css_property("display") != "none"
-                or len(d.find_elements(By.CSS_SELECTOR, "#Result_pesquisa *")) > 0
-            )
-            logs.append("✓ Resultado apareceu na página.")
-        except TimeoutException:
-            # Verificar se reCAPTCHA bloqueou
-            recaptcha_visible = False
+        if not resultado_apareceu:
+            # Checar reCAPTCHA
             try:
-                badge = driver.find_element(By.CSS_SELECTOR, ".grecaptcha-badge")
-                if badge.is_displayed():
-                    recaptcha_visible = True
+                errs = driver.find_elements(By.CSS_SELECTOR, ".grecaptcha-error")
+                for e in errs:
+                    if e.text.strip():
+                        logs.append(f"⛔ reCAPTCHA erro: {e.text.strip()}")
+                        return _erro(cpf, "reCAPTCHA bloqueou a consulta.", etapa, url_final, logs)
             except Exception:
                 pass
 
-            if recaptcha_visible:
-                logs.append("⛔ reCAPTCHA pode ter bloqueado a consulta.")
-                return _erro(cpf, "reCAPTCHA bloqueou a consulta. Não é possível resolver automaticamente.", etapa, url_final, logs)
-
-            # Verificar overlay de processamento
-            try:
-                overlay = driver.find_element(By.CSS_SELECTOR, "#ajax-overlay")
-                if overlay.is_displayed():
-                    logs.append("Overlay 'Processando...' ainda visível. Aguardando mais 10s...")
-                    time.sleep(10)
-            except Exception:
-                pass
-
-            # Verificar novamente
-            try:
-                result_div = driver.find_element(By.CSS_SELECTOR, "#Result_pesquisa")
-                if result_div.text.strip():
-                    logs.append("✓ Resultado encontrado após espera extra.")
-                else:
-                    logs.append("✗ Timeout: resultado não apareceu.")
-                    body_text = driver.find_element(By.TAG_NAME, "body").text[:800]
-                    logs.append(f"Texto da página: {body_text}")
-                    return _erro(cpf, "Timeout aguardando resultado da pesquisa.", etapa, url_final, logs)
-            except Exception:
-                logs.append("✗ Div #Result_pesquisa não encontrada.")
-                return _erro(cpf, "Resultado não carregou após pesquisa.", etapa, url_final, logs)
+            # Capturar estado da página
+            body = driver.find_element(By.TAG_NAME, "body").text[:800]
+            logs.append(f"Texto da página: {body}")
+            return _erro(cpf, "Timeout: resultado não apareceu após pesquisa.", etapa, url_final, logs)
 
         url_final = driver.current_url
+        time.sleep(1)  # Dar tempo para conteúdo renderizar
 
-        # --- Etapa 8: Extrair dados ---
+        # ── 8. Extrair dados ─────────────────────────────────
         etapa = "extrair_dados"
-        nome_crea = ""
-        situacao_crea = ""
-        titulo_crea = ""
+        nome = ""
+        situacao = ""
+        titulo_prof = ""
 
-        # Conteúdo do resultado fica em #Result_pesquisa
         try:
             result_div = driver.find_element(By.CSS_SELECTOR, "#Result_pesquisa")
-            result_html = result_div.get_attribute("innerHTML")
             result_text = result_div.text.strip()
-            logs.append(f"Conteúdo do resultado ({len(result_text)} chars)")
+            logs.append(f"Conteúdo resultado: {len(result_text)} chars")
         except NoSuchElementException:
-            return _erro(cpf, "Div de resultado não encontrada.", etapa, url_final, logs)
+            return _erro(cpf, "Div #Result_pesquisa não encontrada.", etapa, url_final, logs)
 
         if not result_text:
-            return _nao_encontrado(cpf, "Resultado vazio — CPF não encontrado no CREA-MG.", etapa, url_final, logs)
+            return _nao_encontrado(cpf, "Resultado vazio — CPF não encontrado.", etapa, url_final, logs)
 
-        # Verificar mensagem de "não encontrado"
-        result_lower = result_text.lower()
-        if "nenhum" in result_lower and ("encontrad" in result_lower or "resultado" in result_lower):
-            logs.append(f"Mensagem de não encontrado: {result_text[:200]}")
+        # Checar "não encontrado"
+        rt_lower = result_text.lower()
+        if "nenhum" in rt_lower and ("encontrad" in rt_lower or "resultado" in rt_lower):
+            logs.append(f"Mensagem: {result_text[:200]}")
             return _nao_encontrado(cpf, result_text[:200], etapa, url_final, logs)
 
-        # Extrair de tabelas dentro do resultado
+        # Extrair de tabelas / links
         tables = result_div.find_elements(By.TAG_NAME, "table")
-        logs.append(f"Tabelas no resultado: {len(tables)}")
-
-        # Também tentar links/detalhes (a página pode mostrar um link para o profissional)
         links = result_div.find_elements(By.TAG_NAME, "a")
+        logs.append(f"Tabelas: {len(tables)}, Links: {len(links)}")
+
+        # Se houver link para detalhe e nenhuma tabela, clicar no primeiro
         if links and not tables:
-            logs.append(f"Links encontrados: {len(links)}")
-            # Se houver link para detalhe, clicar no primeiro
             try:
-                primeiro_link = links[0]
-                logs.append(f"Clicando no primeiro resultado: {primeiro_link.text}")
-                primeiro_link.click()
+                link_text = links[0].text.strip()
+                logs.append(f"Clicando no resultado: {link_text}")
+                links[0].click()
                 time.sleep(3)
-                # Agora extrair da página de detalhe
                 tables = driver.find_elements(By.TAG_NAME, "table")
                 logs.append(f"Tabelas na página de detalhe: {len(tables)}")
             except Exception as e:
                 logs.append(f"Erro ao clicar link: {e}")
 
-        for idx, table in enumerate(tables):
-            rows = table.find_elements(By.TAG_NAME, "tr")
-            for row in rows:
-                cells = row.find_elements(By.TAG_NAME, "td")
-                texts = [c.text.strip() for c in cells]
+        nome, situacao, titulo_prof = _extrair_de_tabelas(tables, logs)
 
-                for i, txt in enumerate(texts):
-                    low = txt.lower()
-                    if "nome" in low and i + 1 < len(texts) and not nome_crea:
-                        nome_crea = texts[i + 1]
-                        logs.append(f"✓ Nome: {nome_crea}")
-                    elif ("situação" in low or "situacao" in low) and i + 1 < len(texts) and not situacao_crea:
-                        situacao_crea = texts[i + 1]
-                        logs.append(f"✓ Situação: {situacao_crea}")
-                    elif ("título" in low or "titulo" in low) and i + 1 < len(texts) and not titulo_crea:
-                        titulo_crea = texts[i + 1]
-                        logs.append(f"✓ Título: {titulo_crea}")
-
-                # Tentar header (th) + td
-                if not nome_crea:
-                    ths = row.find_elements(By.TAG_NAME, "th")
-                    for j, th in enumerate(ths):
-                        th_low = th.text.strip().lower()
-                        if j < len(texts):
-                            if "nome" in th_low and not nome_crea:
-                                nome_crea = texts[j]
-                            elif ("situação" in th_low or "situacao" in th_low) and not situacao_crea:
-                                situacao_crea = texts[j]
-                            elif ("título" in th_low or "titulo" in th_low) and not titulo_crea:
-                                titulo_crea = texts[j]
-
-        if not nome_crea and not situacao_crea and not titulo_crea:
-            # Fallback: pegar texto bruto do resultado
-            logs.append(f"Dados não extraídos pelos seletores. Texto: {result_text[:500]}")
+        if not nome and not situacao and not titulo_prof:
+            logs.append(f"Não extraído. Texto: {result_text[:500]}")
             return _erro(cpf, "Dados na página mas não extraídos. Revisar seletores.", etapa, url_final, logs)
 
         logs.append("✓ Consulta concluída com sucesso.")
         return {
             "cpf": cpf,
-            "nome_crea": nome_crea,
-            "situacao_crea": situacao_crea,
-            "titulo_crea": titulo_crea,
+            "nome_crea": nome,
+            "situacao_crea": situacao,
+            "titulo_crea": titulo_prof,
             "status": "sucesso",
             "error_message": "",
             "etapa": "concluido",
@@ -287,10 +245,10 @@ def consultar_crea_mg(cpf: str) -> dict:
         }
 
     except WebDriverException as e:
-        logs.append(f"Erro WebDriver: {str(e)[:300]}")
+        logs.append(f"WebDriverException: {str(e)[:300]}")
         return _erro(cpf, f"Erro no navegador: {str(e)[:200]}", etapa, url_final, logs)
     except Exception as e:
-        logs.append(f"Erro inesperado: {type(e).__name__}: {str(e)[:300]}")
+        logs.append(f"{type(e).__name__}: {str(e)[:300]}")
         return _erro(cpf, f"{type(e).__name__}: {str(e)[:200]}", etapa, url_final, logs)
     finally:
         if driver:
@@ -300,7 +258,67 @@ def consultar_crea_mg(cpf: str) -> dict:
                 pass
 
 
-def _erro(cpf: str, msg: str, etapa: str, url: str, logs: list[str]) -> dict:
+# ── Helpers ──────────────────────────────────────────────
+
+
+def _encontrar_elemento(driver, timeout, seletores, logs):
+    """Tenta encontrar elemento por lista de seletores CSS, com wait no primeiro."""
+    for i, sel in enumerate(seletores):
+        try:
+            if i == 0:
+                el = WebDriverWait(driver, timeout).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, sel))
+                )
+            else:
+                el = driver.find_element(By.CSS_SELECTOR, sel)
+            logs.append(f"  Encontrado com: {sel}")
+            return el
+        except (TimeoutException, NoSuchElementException):
+            continue
+    return None
+
+
+def _extrair_de_tabelas(tables, logs):
+    """Extrai nome, situação e título de tabelas da página."""
+    nome = ""
+    situacao = ""
+    titulo = ""
+
+    for idx, table in enumerate(tables):
+        rows = table.find_elements(By.TAG_NAME, "tr")
+        for row in rows:
+            cells = row.find_elements(By.TAG_NAME, "td")
+            texts = [c.text.strip() for c in cells]
+
+            # Padrão rótulo | valor
+            for i, txt in enumerate(texts):
+                low = txt.lower()
+                if "nome" in low and i + 1 < len(texts) and not nome:
+                    nome = texts[i + 1]
+                    logs.append(f"✓ Nome: {nome}")
+                elif ("situação" in low or "situacao" in low) and i + 1 < len(texts) and not situacao:
+                    situacao = texts[i + 1]
+                    logs.append(f"✓ Situação: {situacao}")
+                elif ("título" in low or "titulo" in low) and i + 1 < len(texts) and not titulo:
+                    titulo = texts[i + 1]
+                    logs.append(f"✓ Título: {titulo}")
+
+            # th + td
+            ths = row.find_elements(By.TAG_NAME, "th")
+            for j, th in enumerate(ths):
+                th_low = th.text.strip().lower()
+                if j < len(texts):
+                    if "nome" in th_low and not nome:
+                        nome = texts[j]
+                    elif ("situação" in th_low or "situacao" in th_low) and not situacao:
+                        situacao = texts[j]
+                    elif ("título" in th_low or "titulo" in th_low) and not titulo:
+                        titulo = texts[j]
+
+    return nome, situacao, titulo
+
+
+def _erro(cpf, msg, etapa, url, logs):
     return {
         "cpf": cpf, "nome_crea": "", "situacao_crea": "", "titulo_crea": "",
         "status": "erro", "error_message": msg, "etapa": etapa,
@@ -308,7 +326,7 @@ def _erro(cpf: str, msg: str, etapa: str, url: str, logs: list[str]) -> dict:
     }
 
 
-def _nao_encontrado(cpf: str, msg: str, etapa: str, url: str, logs: list[str]) -> dict:
+def _nao_encontrado(cpf, msg, etapa, url, logs):
     return {
         "cpf": cpf, "nome_crea": "", "situacao_crea": "", "titulo_crea": "",
         "status": "nao_encontrado", "error_message": msg, "etapa": etapa,
