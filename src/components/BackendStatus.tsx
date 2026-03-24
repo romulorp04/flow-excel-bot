@@ -61,7 +61,7 @@ export function BackendOfflineBanner({ online }: { online?: boolean | null }) {
     });
   }, []);
 
-  if (online !== false) return null;
+  if (status !== false) return null;
 
   return (
     <div className="border border-destructive/30 bg-destructive/5 rounded-xl p-5 space-y-4">
