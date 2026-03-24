@@ -1,5 +1,5 @@
 """
-Backend FastAPI — Consulta CREA-MG via automação Selenium.
+Backend FastAPI — Consultas CREA-MG e Canal de Acesso.
 
 Iniciar com:
     cd backend
@@ -22,9 +22,10 @@ app.add_middleware(
 )
 
 
+# ── Modelos ──────────────────────────────────────────────
+
 class CreaRequest(BaseModel):
     cpf: str
-
 
 class CreaResponse(BaseModel):
     cpf: str
@@ -37,6 +38,17 @@ class CreaResponse(BaseModel):
     url_acessada: str = ""
     logs: list[str] = []
 
+class CanalAcessoRequest(BaseModel):
+    email: str
+
+class CanalAcessoResponse(BaseModel):
+    email: str
+    canal: str = ""
+    status: str = "sucesso"
+    error_message: str = ""
+
+
+# ── Rotas ────────────────────────────────────────────────
 
 @app.get("/api/health")
 def health():
@@ -48,3 +60,18 @@ def rota_consulta_crea(req: CreaRequest):
     cpf_limpo = req.cpf.replace(".", "").replace("-", "").replace(" ", "")
     resultado = consultar_crea_mg(cpf_limpo)
     return CreaResponse(**resultado)
+
+
+@app.post("/api/consulta/canal-acesso", response_model=CanalAcessoResponse)
+def rota_consulta_canal_acesso(req: CanalAcessoRequest):
+    """
+    Consulta de canal de acesso por e-mail.
+    TODO: Implementar automação real quando a URL/fluxo for definido.
+    Por enquanto retorna status indicando que não está implementado.
+    """
+    return CanalAcessoResponse(
+        email=req.email,
+        canal="",
+        status="erro",
+        error_message="Consulta Canal de Acesso ainda não implementada. Defina a URL e o fluxo de automação.",
+    )
