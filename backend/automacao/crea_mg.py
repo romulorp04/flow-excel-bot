@@ -58,6 +58,7 @@ def consultar_crea_mg(cpf: str) -> dict:
         campo_cpf.clear()
         campo_cpf.send_keys(cpf_limpo)
         logs.append("Campo CPF preenchido com sucesso.")
+        _screenshot(driver, "02_cpf_preenchido", logs)
 
         etapa = "clicar_pesquisar"
         botao_pesquisar = wait.until(EC.element_to_be_clickable((By.ID, "PESQUISAR")))
