@@ -6,6 +6,27 @@ import { toast } from "sonner";
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
 const POLL_INTERVAL = 8_000;
 
+export function useBackendOnline() {
+  const [online, setOnline] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const check = async () => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/health`, { signal: AbortSignal.timeout(3000) });
+        if (active) setOnline(res.ok);
+      } catch {
+        if (active) setOnline(false);
+      }
+    };
+    check();
+    const id = setInterval(check, POLL_INTERVAL);
+    return () => { active = false; clearInterval(id); };
+  }, []);
+
+  return online;
+}
+
 export function BackendStatus() {
   const [online, setOnline] = useState<boolean | null>(null);
 
