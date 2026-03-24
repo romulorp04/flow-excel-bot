@@ -66,7 +66,7 @@ const Index = () => {
         results[i].canalAcesso = res.canal;
         results[i].statusCanalAcesso = res.status;
         results[i].detalheCanalAcesso = res.error_message || (res.status === "sucesso" ? "Consulta concluída com sucesso." : "Registro não encontrado na consulta.");
-      } catch (error) {
+      } catch (error: any) {
         results[i].statusCanalAcesso = "erro";
         results[i].detalheCanalAcesso = error instanceof Error ? error.message : "Falha ao consultar o backend.";
       }
