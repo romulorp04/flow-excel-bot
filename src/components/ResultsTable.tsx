@@ -25,12 +25,30 @@ function StatusBadge({ status }: { status?: string }) {
   }
 }
 
+function DetailCell({ row, type }: { row: QueryResult; type: "canal" | "crea" }) {
+  const detail = type === "canal" ? row.detalheCanalAcesso : row.detalheCrea;
+  const step = type === "crea" ? row.etapaCrea : undefined;
+  const url = type === "crea" ? row.urlCrea : undefined;
+
+  if (!detail && !step && !url) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+
+  return (
+    <div className="space-y-1 min-w-[240px]">
+      {detail && <p className="text-xs text-foreground leading-5">{detail}</p>}
+      {step && <p className="text-[11px] text-muted-foreground">Etapa: {step}</p>}
+      {url && <p className="text-[11px] text-muted-foreground break-all">URL: {url}</p>}
+    </div>
+  );
+}
+
 export function ResultsTable({ data, type }: ResultsTableProps) {
   if (data.length === 0) return null;
 
   return (
     <div className="rounded-lg border overflow-hidden">
-      <div className="max-h-[400px] overflow-auto">
+      <div className="max-h-[420px] overflow-auto">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/60">
@@ -48,11 +66,12 @@ export function ResultsTable({ data, type }: ResultsTableProps) {
                 </>
               )}
               <TableHead className="font-semibold text-xs">Status</TableHead>
+              <TableHead className="font-semibold text-xs">Detalhe da consulta</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {data.map((row) => (
-              <TableRow key={row.id} className="text-sm">
+              <TableRow key={row.id} className="text-sm align-top">
                 <TableCell className="font-medium">{row.nome}</TableCell>
                 <TableCell className="font-mono text-xs">{row.cpf}</TableCell>
                 <TableCell className="text-xs">{row.email}</TableCell>
@@ -68,6 +87,9 @@ export function ResultsTable({ data, type }: ResultsTableProps) {
                 )}
                 <TableCell>
                   <StatusBadge status={type === "canal" ? row.statusCanalAcesso : row.statusCrea} />
+                </TableCell>
+                <TableCell>
+                  <DetailCell row={row} type={type} />
                 </TableCell>
               </TableRow>
             ))}

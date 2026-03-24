@@ -24,9 +24,12 @@ export interface QueryResult extends UserRow {
   tituloCrea?: string;
   statusCanalAcesso?: "pendente" | "consultando" | "sucesso" | "erro" | "nao_encontrado";
   statusCrea?: "pendente" | "consultando" | "sucesso" | "erro" | "nao_encontrado" | "ignorado";
+  detalheCanalAcesso?: string;
+  detalheCrea?: string;
+  etapaCrea?: string;
+  urlCrea?: string;
+  logsCrea?: string[];
 }
-
-const EXPECTED_HEADERS = ["Situação", "Nome", "CPF", "RG", "Nº Reg. Profissional", "Conselho", "Profissão", "E-Mail", "Telefone", "Celular", "Endereço", "Bairro", "CEP", "Município", "Estado"];
 
 export function parseHtmlExcel(htmlContent: string): { data: UserRow[]; error?: string } {
   const parser = new DOMParser();
@@ -45,7 +48,6 @@ export function parseHtmlExcel(htmlContent: string): { data: UserRow[]; error?: 
   const headerCells = rows[0].querySelectorAll("th, td");
   const headers = Array.from(headerCells).map((c) => c.textContent?.trim() || "");
 
-  // Validate minimum required columns
   const requiredCols = ["Nome", "CPF", "E-Mail", "Conselho"];
   const missing = requiredCols.filter((col) => !headers.includes(col));
   if (missing.length > 0) {

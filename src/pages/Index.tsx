@@ -38,6 +38,7 @@ const Index = () => {
       toast.error(error);
       return;
     }
+
     setData(parsed);
     setFileName(name);
     setFileError(undefined);
@@ -49,13 +50,14 @@ const Index = () => {
 
   const handleQueryCanal = useCallback(async () => {
     setIsQueryingCanal(true);
-    const results: QueryResult[] = data.map((r) => ({ ...r, statusCanalAcesso: "pendente" as const }));
+    const results: QueryResult[] = data.map((r) => ({ ...r, statusCanalAcesso: "pendente" }));
     setCanalResults([...results]);
     setCanalProgress({ current: 0, total: data.length, item: "" });
 
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
       results[i].statusCanalAcesso = "consultando";
+      results[i].detalheCanalAcesso = "Consulta em andamento no backend.";
       setCanalResults([...results]);
       setCanalProgress({ current: i, total: data.length, item: row.email });
 
@@ -63,9 +65,12 @@ const Index = () => {
         const res = await consultarCanalAcesso(row.email);
         results[i].canalAcesso = res.canal;
         results[i].statusCanalAcesso = res.status;
-      } catch {
+        results[i].detalheCanalAcesso = res.error_message || (res.status === "sucesso" ? "Consulta concluída com sucesso." : "Registro não encontrado na consulta.");
+      } catch (error) {
         results[i].statusCanalAcesso = "erro";
+        results[i].detalheCanalAcesso = error instanceof Error ? error.message : "Falha ao consultar o backend.";
       }
+
       setCanalResults([...results]);
     }
 
@@ -78,8 +83,10 @@ const Index = () => {
     setIsQueryingCrea(true);
     const results: QueryResult[] = data.map((r) => ({
       ...r,
-      statusCrea: r.conselho.trim().toUpperCase() === "CREA" ? ("pendente" as const) : ("ignorado" as const),
+      statusCrea: r.conselho.trim().toUpperCase() === "CREA" ? "pendente" : "ignorado",
+      detalheCrea: r.conselho.trim().toUpperCase() === "CREA" ? "Aguardando processamento." : "Consulta ignorada porque o conselho da linha não é CREA.",
     }));
+
     setCreaResults([...results]);
     const creaRows = results.filter((r) => r.statusCrea === "pendente");
     setCreaProgress({ current: 0, total: creaRows.length, item: "" });
@@ -89,6 +96,10 @@ const Index = () => {
       if (results[i].statusCrea !== "pendente") continue;
 
       results[i].statusCrea = "consultando";
+      results[i].detalheCrea = "Iniciando automação Selenium no backend.";
+      results[i].etapaCrea = "inicializacao";
+      results[i].urlCrea = undefined;
+      results[i].logsCrea = [];
       setCreaResults([...results]);
       setCreaProgress({ current: done, total: creaRows.length, item: results[i].cpf });
 
@@ -98,9 +109,16 @@ const Index = () => {
         results[i].situacaoCrea = res.situacao_crea;
         results[i].tituloCrea = res.titulo_crea;
         results[i].statusCrea = res.status;
-      } catch {
+        results[i].detalheCrea = res.error_message || (res.status === "sucesso" ? "Consulta concluída com sucesso." : "Resultado vazio ou não encontrado.");
+        results[i].etapaCrea = res.etapa;
+        results[i].urlCrea = res.url_acessada;
+        results[i].logsCrea = res.logs;
+      } catch (error) {
         results[i].statusCrea = "erro";
+        results[i].detalheCrea = error instanceof Error ? error.message : "Falha de comunicação com o backend da automação.";
+        results[i].etapaCrea = "requisicao_frontend";
       }
+
       done++;
       setCreaResults([...results]);
     }
@@ -112,7 +130,6 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b bg-card">
         <div className="container max-w-6xl mx-auto px-4 py-4 flex items-center gap-3">
           <div className="h-9 w-9 rounded-lg bg-primary flex items-center justify-center">
@@ -126,15 +143,9 @@ const Index = () => {
       </header>
 
       <main className="container max-w-6xl mx-auto px-4 py-6 space-y-6">
-        {/* Upload Section */}
         <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-xl border p-6 space-y-5">
           <h2 className="text-base font-semibold text-foreground">1. Importar planilha de usuários</h2>
-          <FileUploadArea
-            onFileLoaded={handleFileLoaded}
-            isLoaded={isLoaded}
-            fileName={fileName}
-            error={fileError}
-          />
+          <FileUploadArea onFileLoaded={handleFileLoaded} isLoaded={isLoaded} fileName={fileName} error={fileError} />
 
           {isLoaded && data.length > 0 && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}>
@@ -143,7 +154,6 @@ const Index = () => {
           )}
         </motion.section>
 
-        {/* Query Buttons */}
         <motion.section
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: isLoaded ? 1 : 0.5, y: 0 }}
@@ -161,15 +171,9 @@ const Index = () => {
           />
         </motion.section>
 
-        {/* Progress */}
-        {isQueryingCanal && (
-          <QueryProgress label="Consultando Canal de Acesso..." current={canalProgress.current} total={canalProgress.total} currentItem={canalProgress.item} />
-        )}
-        {isQueryingCrea && (
-          <QueryProgress label="Consultando CREA-MG..." current={creaProgress.current} total={creaProgress.total} currentItem={creaProgress.item} />
-        )}
+        {isQueryingCanal && <QueryProgress label="Consultando Canal de Acesso..." current={canalProgress.current} total={canalProgress.total} currentItem={canalProgress.item} />}
+        {isQueryingCrea && <QueryProgress label="Consultando CREA-MG..." current={creaProgress.current} total={creaProgress.total} currentItem={creaProgress.item} />}
 
-        {/* Results */}
         {canalResults.length > 0 && (
           <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-card rounded-xl border p-6 space-y-4">
             <div className="flex items-center justify-between">
@@ -188,7 +192,6 @@ const Index = () => {
           </motion.section>
         )}
 
-        {/* Export */}
         {(canalResults.length > 0 || creaResults.length > 0) && (
           <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-card rounded-xl border p-6">
             <div className="flex items-center justify-between">
