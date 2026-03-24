@@ -208,24 +208,14 @@ def consultar_crea_mg(cpf: str) -> dict:
             logs.append(f"Mensagem: {result_text[:200]}")
             return _nao_encontrado(cpf, result_text[:200], etapa, url_final, logs)
 
-        # Extrair de tabelas / links
+        # Localizar tabelas na área de resultado
         tables = result_div.find_elements(By.TAG_NAME, "table")
-        links = result_div.find_elements(By.TAG_NAME, "a")
-        logs.append(f"Tabelas: {len(tables)}, Links: {len(links)}")
+        if not tables:
+            # Tentar tabelas no body inteiro como fallback
+            tables = driver.find_elements(By.TAG_NAME, "table")
+        logs.append(f"Tabelas encontradas: {len(tables)}")
 
-        # Se houver link para detalhe e nenhuma tabela, clicar no primeiro
-        if links and not tables:
-            try:
-                link_text = links[0].text.strip()
-                logs.append(f"Clicando no resultado: {link_text}")
-                links[0].click()
-                time.sleep(3)
-                tables = driver.find_elements(By.TAG_NAME, "table")
-                logs.append(f"Tabelas na página de detalhe: {len(tables)}")
-            except Exception as e:
-                logs.append(f"Erro ao clicar link: {e}")
-
-        nome, situacao, titulo_prof = _extrair_de_tabelas(tables, logs)
+        nome, situacao, titulo_prof = _extrair_por_cabecalhos(tables, logs)
 
         if not nome and not situacao and not titulo_prof:
             logs.append(f"Não extraído. Texto: {result_text[:500]}")
