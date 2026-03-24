@@ -11,6 +11,7 @@ import { consultarCanalAcesso, consultarCreaMG } from "@/lib/apiClient";
 import { toast } from "sonner";
 import { FileSpreadsheet } from "lucide-react";
 import { BackendStatus, BackendOfflineBanner } from "@/components/BackendStatus";
+import { BackendDownload } from "@/components/BackendDownload";
 
 const Index = () => {
   const [data, setData] = useState<UserRow[]>([]);
