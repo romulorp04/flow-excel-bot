@@ -49,10 +49,19 @@ export async function consultarCreaMG(cpf: string): Promise<CreaResponse> {
       body: JSON.stringify({ cpf }),
     });
   } catch (networkErr) {
-    throw new Error(
-      `Falha de conexão com o backend (${BACKEND_URL}). ` +
-      `Verifique se o servidor está rodando. Detalhe: ${networkErr instanceof Error ? networkErr.message : String(networkErr)}`
+    const err: any = new Error(
+      `⚠️ Backend fora do ar em ${BACKEND_URL}. ` +
+      `Para iniciar: cd backend && uvicorn main:app --port 8000. ` +
+      `Detalhe: ${networkErr instanceof Error ? networkErr.message : String(networkErr)}`
     );
+    err.etapa = "conexao_backend";
+    err.url_acessada = `${BACKEND_URL}/api/consulta/crea-mg`;
+    err.logs = [
+      "O frontend tentou conectar ao backend mas ele não respondeu.",
+      `URL tentada: ${BACKEND_URL}/api/consulta/crea-mg`,
+      "Solução: inicie o backend Python com 'cd backend && uvicorn main:app --port 8000'",
+    ];
+    throw err;
   }
 
   const body = await res.json().catch(() => null);
