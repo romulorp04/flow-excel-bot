@@ -36,10 +36,16 @@
 
 ### Comando único
 
-**Windows** — clique duplo em `start.bat` ou execute no terminal:
+**Windows** — recomendado: clique duplo em `start_all.bat` ou execute no terminal:
 ```
-start.bat
+start_all.bat
 ```
+
+Esse script:
+- instala dependências do backend e frontend
+- sobe o backend em **http://localhost:8000**
+- espera o health check em **/api/health** responder
+- só então sobe o frontend em **http://localhost:8080**
 
 **Linux / Mac:**
 ```bash
@@ -47,7 +53,15 @@ chmod +x start.sh
 ./start.sh
 ```
 
-O script instala tudo, sobe backend (porta **8000**) e frontend (porta **8080**), e abre automaticamente.
+### Scripts locais
+
+| Arquivo | Função |
+|---------|--------|
+| `start_backend.bat` | Instala dependências Python e sobe o backend em `http://localhost:8000` |
+| `start_frontend.bat` | Sobe apenas o frontend em `http://localhost:8080` |
+| `start_all.bat` | Sobe backend, valida `/api/health` e depois sobe o frontend |
+
+O fluxo recomendado no Windows é usar **`start_all.bat`**.
 
 Acesse: **http://localhost:8080**
 
@@ -56,14 +70,26 @@ Acesse: **http://localhost:8080**
 Terminal 1 — Backend:
 ```bash
 cd backend
-pip install -r requirements.txt
-uvicorn main:app --port 8000
+python -m pip install -r requirements.txt
+python -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
 Terminal 2 — Frontend:
 ```bash
 npm install
 npm run dev
+```
+
+Validação mínima do backend:
+
+```bash
+curl http://localhost:8000/api/health
+```
+
+Resposta esperada:
+
+```json
+{"status":"ok"}
 ```
 
 ## Fluxo de uso
@@ -80,6 +106,6 @@ npm run dev
 
 | Erro | Causa | Solução |
 |------|-------|---------|
-| `Failed to fetch` | Backend não está rodando | Inicie o backend com `uvicorn` |
+| `Backend fora do ar em http://localhost:8000` | Backend não está rodando | Execute `start_all.bat` ou `start_backend.bat` |
 | `Campo CPF não encontrado` | Página do CREA mudou | Revisar seletores em `crea_mg.py` |
 | `Timeout no resultado` | Site do CREA lento/fora do ar | Tentar novamente mais tarde |

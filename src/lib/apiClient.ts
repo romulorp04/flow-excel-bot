@@ -30,10 +30,12 @@ function buildDetailedError(
   const err: any = new Error(baseMsg);
   err.etapa = extra?.etapa || "conexao_backend";
   err.url_acessada = extra?.url_acessada || `${BACKEND_URL}${route}`;
+  err.detail = baseMsg;
   err.logs = extra?.logs || [
     "O frontend tentou conectar ao backend mas ele não respondeu.",
     `URL tentada: ${BACKEND_URL}${route}`,
-    "Solução: inicie o backend com 'cd backend && uvicorn main:app --port 8000'",
+    "Solução: execute start_all.bat para subir backend + frontend automaticamente.",
+    "Ou execute start_backend.bat para subir apenas o backend na porta 8000.",
   ];
   return err;
 }
@@ -48,10 +50,19 @@ async function fetchBackend<T>(route: string, body: object): Promise<T> {
     });
   } catch (networkErr) {
     throw buildDetailedError(
-      `⚠️ Backend fora do ar em ${BACKEND_URL}. ` +
-      `Para iniciar: cd backend && uvicorn main:app --port 8000. ` +
+      `Backend fora do ar em ${BACKEND_URL}. ` +
       `Detalhe: ${networkErr instanceof Error ? networkErr.message : String(networkErr)}`,
       route,
+      {
+        etapa: "conexao_backend",
+        url_acessada: `${BACKEND_URL}${route}`,
+        logs: [
+          `Backend fora do ar em ${BACKEND_URL}`,
+          `URL chamada: ${BACKEND_URL}${route}`,
+          `Detalhe real: ${networkErr instanceof Error ? networkErr.message : String(networkErr)}`,
+          "Inicie o ambiente local com start_all.bat ou, se preferir, rode start_backend.bat antes do frontend.",
+        ],
+      }
     );
   }
 
