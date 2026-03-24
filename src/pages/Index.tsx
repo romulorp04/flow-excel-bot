@@ -14,6 +14,7 @@ import { BackendStatus, BackendOfflineBanner, useBackendOnline } from "@/compone
 import { BackendDownload } from "@/components/BackendDownload";
 
 const Index = () => {
+  const backendOnline = useBackendOnline();
   const [data, setData] = useState<UserRow[]>([]);
   const [fileName, setFileName] = useState<string>();
   const [fileError, setFileError] = useState<string>();
