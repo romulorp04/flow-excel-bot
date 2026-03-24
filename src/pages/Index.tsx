@@ -10,7 +10,7 @@ import { parseHtmlExcel, UserRow, QueryResult } from "@/lib/parseHtmlExcel";
 import { consultarCanalAcesso, consultarCreaMG } from "@/lib/apiClient";
 import { toast } from "sonner";
 import { FileSpreadsheet } from "lucide-react";
-import { BackendStatus } from "@/components/BackendStatus";
+import { BackendStatus, BackendOfflineBanner } from "@/components/BackendStatus";
 
 const Index = () => {
   const [data, setData] = useState<UserRow[]>([]);
