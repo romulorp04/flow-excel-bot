@@ -48,24 +48,10 @@ export function BackendStatus({ online }: { online?: boolean | null }) {
   );
 }
 
-export function BackendOfflineBanner() {
-  const [online, setOnline] = useState<boolean | null>(null);
+export function BackendOfflineBanner({ online }: { online?: boolean | null }) {
+  const fallback = useBackendOnline();
+  const status = online ?? fallback;
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    const check = async () => {
-      try {
-        const res = await fetch(`${BACKEND_URL}/api/health`, { signal: AbortSignal.timeout(3000) });
-        if (active) setOnline(res.ok);
-      } catch {
-        if (active) setOnline(false);
-      }
-    };
-    check();
-    const id = setInterval(check, POLL_INTERVAL);
-    return () => { active = false; clearInterval(id); };
-  }, []);
 
   const handleCopy = useCallback((text: string) => {
     navigator.clipboard.writeText(text).then(() => {
