@@ -40,8 +40,8 @@ def consultar_crea_mg(cpf: str) -> dict:
         logs.append(f"CPF normalizado: {cpf_limpo}")
 
         etapa = "criar_driver"
-        logs.append("Criando Chrome headless...")
-        driver = criar_driver(headless=True)
+        logs.append("Criando Chrome SEM headless (depuração visual)...")
+        driver = criar_driver(headless=False)
         wait = WebDriverWait(driver, WAIT_TIMEOUT)
         logs.append("Driver criado com sucesso.")
 
