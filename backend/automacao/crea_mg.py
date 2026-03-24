@@ -1,20 +1,5 @@
-"""
-Automação de consulta ao CREA-MG via Selenium.
-
-URL: https://crea-mg.sitac.com.br/app/view/sight/externo.php?form=PesquisarProfissionalEmpresa
-
-Fluxo:
-  1. Abre URL
-  2. Preenche campo CPF (By.ID, "CPF")
-  3. Clica botão Pesquisar (By.ID, "PESQUISAR")
-  4. Aguarda tabela de resultados (table.table_datatable)
-  5. Lê primeira linha válida (tbody tr) e extrai por posição:
-     - celulas[0] = nome_crea
-     - celulas[1] = situacao_crea
-     - celulas[2] = titulo_crea
-"""
-
 import time
+
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -36,130 +21,155 @@ def consultar_crea_mg(cpf: str) -> dict:
     driver = None
 
     try:
-        # ── 1. Criar driver ──────────────────────────────────
+        etapa = "normalizar_cpf"
+        cpf_limpo = str(cpf).strip().replace(".", "").replace("-", "").replace(" ", "")
+        cpf_limpo = cpf_limpo.zfill(11)
+        logs.append(f"CPF normalizado: {cpf_limpo}")
+
         etapa = "criar_driver"
         logs.append("Criando Chrome headless...")
         driver = criar_driver(headless=True)
         wait = WebDriverWait(driver, WAIT_TIMEOUT)
-        logs.append("✓ Driver criado.")
+        logs.append("Driver criado com sucesso.")
 
-        # ── 2. Abrir página ──────────────────────────────────
         etapa = "abrir_pagina"
         logs.append(f"Acessando {URL_CREA}")
         driver.get(URL_CREA)
         url_final = driver.current_url
         logs.append(f"URL final: {url_final}")
-        logs.append(f"Título: {driver.title}")
+        logs.append(f"Título da página: {driver.title}")
 
-        # ── 3. Preencher CPF ─────────────────────────────────
         etapa = "preencher_cpf"
-        cpf = cpf.zfill(11)
-        logs.append(f"CPF normalizado: {cpf}")
-        logs.append("Aguardando campo CPF (By.ID, 'CPF')...")
         campo_cpf = wait.until(EC.presence_of_element_located((By.ID, "CPF")))
         campo_cpf.clear()
-        campo_cpf.send_keys(cpf)
-        time.sleep(0.3)
-        logs.append(f"✓ CPF preenchido: {campo_cpf.get_attribute('value')}")
+        campo_cpf.send_keys(cpf_limpo)
+        logs.append("Campo CPF preenchido com sucesso.")
 
-        # ── 4. Clicar Pesquisar ──────────────────────────────
         etapa = "clicar_pesquisar"
-        logs.append("Aguardando botão PESQUISAR (By.ID, 'PESQUISAR')...")
-        btn = wait.until(EC.element_to_be_clickable((By.ID, "PESQUISAR")))
-        logs.append(f"✓ Botão encontrado (<{btn.tag_name}>). Clicando...")
+        botao_pesquisar = wait.until(EC.element_to_be_clickable((By.ID, "PESQUISAR")))
         try:
-            btn.click()
-            logs.append("✓ Click nativo executado.")
+            botao_pesquisar.click()
+            logs.append("Botão PESQUISAR clicado com click nativo.")
         except Exception:
-            logs.append("Click nativo falhou, tentando JS...")
-            driver.execute_script("arguments[0].click();", btn)
-            logs.append("✓ Click via JS executado.")
+            driver.execute_script("arguments[0].click();", botao_pesquisar)
+            logs.append("Botão PESQUISAR clicado com JavaScript.")
 
-        # ── 5. Aguardar tabela com linha útil ────────────────
         etapa = "aguardar_tabela"
-        logs.append("Aguardando tabela com linha útil (>=5 td)...")
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "table.table_datatable")))
+        logs.append("Tabela principal encontrada.")
 
-        def _tabela_com_linha_util(driver):
+        # Esperar a linha útil de resultado, não só a tabela vazia
+        etapa = "aguardar_linhas"
+        fim = time.time() + WAIT_TIMEOUT
+        linhas_validas = []
+        while time.time() < fim:
             linhas = driver.find_elements(By.CSS_SELECTOR, "table.table_datatable tbody tr")
+            linhas_validas = []
             for linha in linhas:
                 celulas = linha.find_elements(By.TAG_NAME, "td")
-                if len(celulas) >= 5:
-                    return True
-            return False
+                textos = [c.text.strip() for c in celulas]
+                if len(celulas) >= 3 and any(textos):
+                    linhas_validas.append(celulas)
+            if linhas_validas:
+                break
+            time.sleep(0.5)
 
-        wait.until(_tabela_com_linha_util)
-        logs.append("✓ Tabela com linha útil encontrada.")
-        time.sleep(0.5)
+        logs.append(f"Quantidade de linhas válidas encontradas: {len(linhas_validas)}")
 
-        # ── 6. Extrair dados ─────────────────────────────────
         etapa = "extrair_dados"
-        url_final = driver.current_url
-        linhas = driver.find_elements(By.CSS_SELECTOR, "table.table_datatable tbody tr")
-        logs.append(f"Linhas encontradas: {len(linhas)}")
-
-        nome = ""
-        situacao = ""
-        titulo = ""
-
-        for i, linha in enumerate(linhas):
-            celulas = linha.find_elements(By.TAG_NAME, "td")
-            if len(celulas) >= 5:
-                nome = celulas[0].text.strip()
-                situacao = celulas[1].text.strip()
-                titulo = celulas[2].text.strip()
-                logs.append(f"✓ Linha {i}: nome={nome}, situação={situacao}, título={titulo}")
-                break
-            elif len(celulas) >= 3:
-                nome = celulas[0].text.strip()
-                situacao = celulas[1].text.strip()
-                titulo = celulas[2].text.strip()
-                logs.append(f"✓ Linha {i} (3 cols): nome={nome}, situação={situacao}, título={titulo}")
-                break
-            else:
-                logs.append(f"Linha {i}: apenas {len(celulas)} célula(s), pulando.")
-
-        if not nome and not situacao and not titulo:
-            # Capturar HTML parcial para diagnóstico
+        if not linhas_validas:
             try:
-                html_tabela = driver.find_element(By.CSS_SELECTOR, "table.table_datatable").get_attribute("outerHTML")[:1500]
+                html_tabela = driver.find_element(
+                    By.CSS_SELECTOR, "table.table_datatable"
+                ).get_attribute("outerHTML")[:2000]
                 logs.append(f"HTML parcial da tabela: {html_tabela}")
             except Exception:
-                body_text = driver.find_element(By.TAG_NAME, "body").text[:800]
-                logs.append(f"Texto da página: {body_text}")
-            return _erro(cpf, "Tabela encontrada mas sem linha de dados válida.", etapa, url_final, logs)
+                pass
+            try:
+                body_text = driver.find_element(By.TAG_NAME, "body").text[:1200]
+                logs.append(f"Texto parcial da página: {body_text}")
+            except Exception:
+                pass
+            return _erro(
+                cpf_limpo,
+                "Tabela encontrada, mas nenhuma linha válida de resultado foi carregada.",
+                etapa,
+                driver.current_url,
+                logs,
+            )
 
-        # Checar "não encontrado"
-        if "nenhum" in nome.lower() or "não encontrad" in nome.lower():
-            logs.append(f"Resultado indica não encontrado: {nome}")
-            return _nao_encontrado(cpf, nome, etapa, url_final, logs)
+        primeira_linha = linhas_validas[0]
+        nome_crea = primeira_linha[0].text.strip() if len(primeira_linha) > 0 else ""
+        situacao_crea = primeira_linha[1].text.strip() if len(primeira_linha) > 1 else ""
+        titulo_crea = primeira_linha[2].text.strip() if len(primeira_linha) > 2 else ""
 
-        logs.append("✓ Consulta concluída com sucesso.")
+        logs.append(f"Nome extraído: {nome_crea}")
+        logs.append(f"Situação extraída: {situacao_crea}")
+        logs.append(f"Título extraído: {titulo_crea}")
+
+        if not nome_crea and not situacao_crea and not titulo_crea:
+            return _erro(
+                cpf_limpo,
+                "A linha de resultado foi encontrada, mas os dados vieram vazios.",
+                etapa,
+                driver.current_url,
+                logs,
+            )
+
+        if "nenhum" in nome_crea.lower() or "não encontrad" in nome_crea.lower():
+            return _nao_encontrado(
+                cpf_limpo,
+                nome_crea or "Nenhum registro encontrado.",
+                etapa,
+                driver.current_url,
+                logs,
+            )
+
         return {
-            "cpf": cpf,
-            "nome_crea": nome,
-            "situacao_crea": situacao,
-            "titulo_crea": titulo,
+            "cpf": cpf_limpo,
+            "nome_crea": nome_crea,
+            "situacao_crea": situacao_crea,
+            "titulo_crea": titulo_crea,
             "status": "sucesso",
             "error_message": "",
             "etapa": "concluido",
-            "url_acessada": url_final,
+            "url_acessada": driver.current_url,
             "logs": logs,
         }
 
     except TimeoutException as e:
         logs.append(f"TimeoutException na etapa '{etapa}': {str(e)[:300]}")
         try:
-            body_text = driver.find_element(By.TAG_NAME, "body").text[:800] if driver else ""
-            logs.append(f"Texto da página: {body_text}")
+            if driver:
+                body_text = driver.find_element(By.TAG_NAME, "body").text[:1200]
+                logs.append(f"Texto parcial da página: {body_text}")
         except Exception:
             pass
-        return _erro(cpf, f"Timeout na etapa '{etapa}'.", etapa, url_final, logs)
+        return _erro(
+            str(cpf).strip(),
+            f"Timeout na etapa '{etapa}'.",
+            etapa,
+            driver.current_url if driver else url_final,
+            logs,
+        )
     except WebDriverException as e:
         logs.append(f"WebDriverException: {str(e)[:300]}")
-        return _erro(cpf, f"Erro no navegador: {str(e)[:200]}", etapa, url_final, logs)
+        return _erro(
+            str(cpf).strip(),
+            f"Erro no navegador: {str(e)[:200]}",
+            etapa,
+            driver.current_url if driver else url_final,
+            logs,
+        )
     except Exception as e:
         logs.append(f"{type(e).__name__}: {str(e)[:300]}")
-        return _erro(cpf, f"{type(e).__name__}: {str(e)[:200]}", etapa, url_final, logs)
+        return _erro(
+            str(cpf).strip(),
+            f"{type(e).__name__}: {str(e)[:200]}",
+            etapa,
+            driver.current_url if driver else url_final,
+            logs,
+        )
     finally:
         if driver:
             try:
@@ -170,15 +180,27 @@ def consultar_crea_mg(cpf: str) -> dict:
 
 def _erro(cpf, msg, etapa, url, logs):
     return {
-        "cpf": cpf, "nome_crea": "", "situacao_crea": "", "titulo_crea": "",
-        "status": "erro", "error_message": msg, "etapa": etapa,
-        "url_acessada": url, "logs": logs,
+        "cpf": cpf,
+        "nome_crea": "",
+        "situacao_crea": "",
+        "titulo_crea": "",
+        "status": "erro",
+        "error_message": msg,
+        "etapa": etapa,
+        "url_acessada": url,
+        "logs": logs,
     }
 
 
 def _nao_encontrado(cpf, msg, etapa, url, logs):
     return {
-        "cpf": cpf, "nome_crea": "", "situacao_crea": "", "titulo_crea": "",
-        "status": "nao_encontrado", "error_message": msg, "etapa": etapa,
-        "url_acessada": url, "logs": logs,
+        "cpf": cpf,
+        "nome_crea": "",
+        "situacao_crea": "",
+        "titulo_crea": "",
+        "status": "nao_encontrado",
+        "error_message": msg,
+        "etapa": etapa,
+        "url_acessada": url,
+        "logs": logs,
     }
