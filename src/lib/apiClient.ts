@@ -1,12 +1,10 @@
-// Backend API client
-// Configure BACKEND_URL to point to your FastAPI server
-
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
 
 export interface CanalAcessoResponse {
   email: string;
   canal: string;
   status: "sucesso" | "erro" | "nao_encontrado";
+  error_message?: string;
 }
 
 export interface CreaResponse {
@@ -15,6 +13,21 @@ export interface CreaResponse {
   situacao_crea: string;
   titulo_crea: string;
   status: "sucesso" | "erro" | "nao_encontrado";
+  error_message?: string;
+  etapa?: string;
+  url_acessada?: string;
+  logs?: string[];
+}
+
+async function parseResponse<T>(res: Response): Promise<T> {
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const detail = body?.error_message || body?.detail || `Erro HTTP ${res.status}`;
+    throw new Error(detail);
+  }
+
+  return body as T;
 }
 
 export async function consultarCanalAcesso(email: string): Promise<CanalAcessoResponse> {
@@ -23,8 +36,8 @@ export async function consultarCanalAcesso(email: string): Promise<CanalAcessoRe
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email }),
   });
-  if (!res.ok) throw new Error(`Erro ${res.status}`);
-  return res.json();
+
+  return parseResponse<CanalAcessoResponse>(res);
 }
 
 export async function consultarCreaMG(cpf: string): Promise<CreaResponse> {
@@ -33,6 +46,6 @@ export async function consultarCreaMG(cpf: string): Promise<CreaResponse> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cpf }),
   });
-  if (!res.ok) throw new Error(`Erro ${res.status}`);
-  return res.json();
+
+  return parseResponse<CreaResponse>(res);
 }

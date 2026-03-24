@@ -26,6 +26,7 @@ export function ExportButton({ canalResults, creaResults }: ExportButtonProps) {
         Profissão: r.profissao,
         "Canal de Acesso": r.canalAcesso || "",
         Status: r.statusCanalAcesso || "",
+        "Detalhe Canal": r.detalheCanalAcesso || "",
       }));
       const ws = XLSX.utils.json_to_sheet(wsData);
       XLSX.utils.book_append_sheet(wb, ws, "Canal de Acesso");
@@ -42,6 +43,9 @@ export function ExportButton({ canalResults, creaResults }: ExportButtonProps) {
         "Situação CREA": r.situacaoCrea || "",
         "Título CREA": r.tituloCrea || "",
         Status: r.statusCrea || "",
+        "Detalhe CREA": r.detalheCrea || "",
+        "Etapa CREA": r.etapaCrea || "",
+        "URL CREA": r.urlCrea || "",
       }));
       const ws = XLSX.utils.json_to_sheet(wsData);
       XLSX.utils.book_append_sheet(wb, ws, "CREA-MG");
