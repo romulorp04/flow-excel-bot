@@ -27,37 +27,23 @@ export function useBackendOnline() {
   return online;
 }
 
-export function BackendStatus() {
-  const [online, setOnline] = useState<boolean | null>(null);
+export function BackendStatus({ online }: { online?: boolean | null }) {
+  const fallback = useBackendOnline();
+  const status = online ?? fallback;
 
-  useEffect(() => {
-    let active = true;
-    const check = async () => {
-      try {
-        const res = await fetch(`${BACKEND_URL}/api/health`, { signal: AbortSignal.timeout(3000) });
-        if (active) setOnline(res.ok);
-      } catch {
-        if (active) setOnline(false);
-      }
-    };
-    check();
-    const id = setInterval(check, POLL_INTERVAL);
-    return () => { active = false; clearInterval(id); };
-  }, []);
-
-  if (online === null) return null;
+  if (status === null || status === undefined) return null;
 
   return (
     <div
       className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full transition-colors ${
-        online
+        status
           ? "bg-green-500/15 text-green-600 dark:text-green-400"
           : "bg-destructive/15 text-destructive"
       }`}
-      title={online ? `Backend online em ${BACKEND_URL}` : `Backend offline em ${BACKEND_URL}`}
+      title={status ? `Backend online em ${BACKEND_URL}` : `Backend offline em ${BACKEND_URL}`}
     >
-      {online ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
-      <span>{online ? "Backend online" : "Backend offline"}</span>
+      {status ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
+      <span>{status ? "Backend online" : "Backend offline"}</span>
     </div>
   );
 }
