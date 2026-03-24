@@ -69,6 +69,11 @@ def consultar_crea_mg(cpf: str) -> dict:
             driver.execute_script("arguments[0].click();", botao_pesquisar)
             logs.append("Botão PESQUISAR clicado com JavaScript.")
 
+        time.sleep(1)
+        logs.append(f"URL após pesquisar: {driver.current_url}")
+        logs.append(f"Título após pesquisar: {driver.title}")
+        _screenshot(driver, "03_apos_pesquisar", logs)
+
         etapa = "aguardar_tabela"
         wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "table.table_datatable")))
         logs.append("Tabela principal encontrada.")
