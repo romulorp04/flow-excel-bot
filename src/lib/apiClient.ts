@@ -41,11 +41,30 @@ export async function consultarCanalAcesso(email: string): Promise<CanalAcessoRe
 }
 
 export async function consultarCreaMG(cpf: string): Promise<CreaResponse> {
-  const res = await fetch(`${BACKEND_URL}/api/consulta/crea-mg`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cpf }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BACKEND_URL}/api/consulta/crea-mg`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cpf }),
+    });
+  } catch (networkErr) {
+    throw new Error(
+      `Falha de conexão com o backend (${BACKEND_URL}). ` +
+      `Verifique se o servidor está rodando. Detalhe: ${networkErr instanceof Error ? networkErr.message : String(networkErr)}`
+    );
+  }
 
-  return parseResponse<CreaResponse>(res);
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const detail = body?.error_message || body?.detail || `Erro HTTP ${res.status}`;
+    const err: any = new Error(detail);
+    err.etapa = body?.etapa || "resposta_backend";
+    err.url_acessada = body?.url_acessada;
+    err.logs = body?.logs;
+    throw err;
+  }
+
+  return body as CreaResponse;
 }
