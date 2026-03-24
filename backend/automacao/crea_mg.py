@@ -1,3 +1,4 @@
+import os
 import time
 
 from selenium.webdriver.common.by import By
@@ -5,6 +6,18 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
 from automacao.browser import criar_driver
+
+SCREENSHOT_DIR = os.path.join(os.path.dirname(__file__), "..", "screenshots")
+os.makedirs(SCREENSHOT_DIR, exist_ok=True)
+
+
+def _screenshot(driver, nome, logs):
+    try:
+        path = os.path.join(SCREENSHOT_DIR, f"{nome}.png")
+        driver.save_screenshot(path)
+        logs.append(f"📸 Screenshot salvo: {path}")
+    except Exception as e:
+        logs.append(f"⚠ Falha ao salvar screenshot '{nome}': {e}")
 
 URL_CREA = (
     "https://crea-mg.sitac.com.br/app/view/sight/externo.php"
@@ -27,8 +40,8 @@ def consultar_crea_mg(cpf: str) -> dict:
         logs.append(f"CPF normalizado: {cpf_limpo}")
 
         etapa = "criar_driver"
-        logs.append("Criando Chrome headless...")
-        driver = criar_driver(headless=True)
+        logs.append("Criando Chrome SEM headless (depuração visual)...")
+        driver = criar_driver(headless=False)
         wait = WebDriverWait(driver, WAIT_TIMEOUT)
         logs.append("Driver criado com sucesso.")
 
@@ -38,12 +51,14 @@ def consultar_crea_mg(cpf: str) -> dict:
         url_final = driver.current_url
         logs.append(f"URL final: {url_final}")
         logs.append(f"Título da página: {driver.title}")
+        _screenshot(driver, "01_pagina_aberta", logs)
 
         etapa = "preencher_cpf"
         campo_cpf = wait.until(EC.presence_of_element_located((By.ID, "CPF")))
         campo_cpf.clear()
         campo_cpf.send_keys(cpf_limpo)
         logs.append("Campo CPF preenchido com sucesso.")
+        _screenshot(driver, "02_cpf_preenchido", logs)
 
         etapa = "clicar_pesquisar"
         botao_pesquisar = wait.until(EC.element_to_be_clickable((By.ID, "PESQUISAR")))
@@ -54,9 +69,15 @@ def consultar_crea_mg(cpf: str) -> dict:
             driver.execute_script("arguments[0].click();", botao_pesquisar)
             logs.append("Botão PESQUISAR clicado com JavaScript.")
 
+        time.sleep(1)
+        logs.append(f"URL após pesquisar: {driver.current_url}")
+        logs.append(f"Título após pesquisar: {driver.title}")
+        _screenshot(driver, "03_apos_pesquisar", logs)
+
         etapa = "aguardar_tabela"
         wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "table.table_datatable")))
         logs.append("Tabela principal encontrada.")
+        _screenshot(driver, "04_tabela_encontrada", logs)
 
         # Esperar a linha útil de resultado, não só a tabela vazia
         etapa = "aguardar_linhas"
