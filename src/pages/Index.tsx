@@ -144,7 +144,7 @@ const Index = () => {
             <h1 className="text-lg font-bold text-foreground leading-tight">Consulta de Canal de Acesso e CREA-MG</h1>
             <p className="text-xs text-muted-foreground">Sistema de consulta automatizada</p>
           </div>
-        <BackendStatus />
+        <BackendStatus online={backendOnline} />
         </div>
       </header>
 
