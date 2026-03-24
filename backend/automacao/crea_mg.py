@@ -53,6 +53,8 @@ def consultar_crea_mg(cpf: str) -> dict:
 
         # ── 3. Preencher CPF ─────────────────────────────────
         etapa = "preencher_cpf"
+        cpf = cpf.zfill(11)
+        logs.append(f"CPF normalizado: {cpf}")
         logs.append("Aguardando campo CPF (By.ID, 'CPF')...")
         campo_cpf = wait.until(EC.presence_of_element_located((By.ID, "CPF")))
         campo_cpf.clear()
