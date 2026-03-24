@@ -27,40 +27,43 @@
 | `backend/automacao/browser.py` | Configuração do Chrome/Selenium com opções stealth |
 | `backend/requirements.txt` | Dependências Python do backend |
 
-## Como rodar
+## Como rodar (modo fácil)
 
-### 1. Backend (Python)
+### Pré-requisitos
+- **Node.js 18+** e **npm**
+- **Python 3.10+**
+- **Google Chrome** instalado
 
+### Comando único
+
+**Windows** — clique duplo em `start.bat` ou execute no terminal:
+```
+start.bat
+```
+
+**Linux / Mac:**
+```bash
+chmod +x start.sh
+./start.sh
+```
+
+O script instala tudo, sobe backend (porta **8000**) e frontend (porta **8080**), e abre automaticamente.
+
+Acesse: **http://localhost:8080**
+
+### Rodar manualmente (avançado)
+
+Terminal 1 — Backend:
 ```bash
 cd backend
 pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn main:app --port 8000
 ```
 
-**Pré-requisitos:**
-- Python 3.10+
-- Google Chrome instalado
-- O `webdriver-manager` baixa o ChromeDriver automaticamente
-
-### 2. Frontend (React)
-
+Terminal 2 — Frontend:
 ```bash
 npm install
 npm run dev
-```
-
-O frontend roda na porta **8080** e espera o backend em `http://localhost:8000`.
-
-Para usar outra URL de backend, defina a variável de ambiente:
-```bash
-VITE_BACKEND_URL=http://meuservidor:8000 npm run dev
-```
-
-### 3. Testar se o backend está rodando
-
-```bash
-curl http://localhost:8000/api/health
-# Deve retornar: {"status":"ok"}
 ```
 
 ## Fluxo de uso
