@@ -10,6 +10,7 @@ import { parseHtmlExcel, UserRow, QueryResult } from "@/lib/parseHtmlExcel";
 import { consultarCanalAcesso, consultarCreaMG } from "@/lib/apiClient";
 import { toast } from "sonner";
 import { FileSpreadsheet } from "lucide-react";
+import { BackendStatus } from "@/components/BackendStatus";
 
 const Index = () => {
   const [data, setData] = useState<UserRow[]>([]);
@@ -141,6 +142,7 @@ const Index = () => {
             <h1 className="text-lg font-bold text-foreground leading-tight">Consulta de Canal de Acesso e CREA-MG</h1>
             <p className="text-xs text-muted-foreground">Sistema de consulta automatizada</p>
           </div>
+        <BackendStatus />
         </div>
       </header>
 
