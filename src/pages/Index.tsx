@@ -1,16 +1,205 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState, useCallback } from "react";
+import { motion } from "framer-motion";
+import { FileUploadArea } from "@/components/FileUploadArea";
+import { DataPreviewTable } from "@/components/DataPreviewTable";
+import { QueryButtons } from "@/components/QueryButtons";
+import { QueryProgress } from "@/components/QueryProgress";
+import { ResultsTable } from "@/components/ResultsTable";
+import { ExportButton } from "@/components/ExportButton";
+import { parseHtmlExcel, UserRow, QueryResult } from "@/lib/parseHtmlExcel";
+import { consultarCanalAcesso, consultarCreaMG } from "@/lib/apiClient";
+import { toast } from "sonner";
+import { FileSpreadsheet } from "lucide-react";
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+const Index = () => {
+  const [data, setData] = useState<UserRow[]>([]);
+  const [fileName, setFileName] = useState<string>();
+  const [fileError, setFileError] = useState<string>();
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  const [canalResults, setCanalResults] = useState<QueryResult[]>([]);
+  const [creaResults, setCreaResults] = useState<QueryResult[]>([]);
+
+  const [isQueryingCanal, setIsQueryingCanal] = useState(false);
+  const [isQueryingCrea, setIsQueryingCrea] = useState(false);
+  const [canalProgress, setCanalProgress] = useState({ current: 0, total: 0, item: "" });
+  const [creaProgress, setCreaProgress] = useState({ current: 0, total: 0, item: "" });
+
+  const conselhos = [...new Set(data.map((r) => r.conselho.toUpperCase().trim()))];
+  const showCftButton = conselhos.some((c) => c.includes("CFT") || c.includes("CRT"));
+  const showCauButton = conselhos.includes("CAU");
+
+  const handleFileLoaded = useCallback((content: string, name: string) => {
+    const { data: parsed, error } = parseHtmlExcel(content);
+    if (error) {
+      setFileError(error);
+      setIsLoaded(false);
+      setData([]);
+      toast.error(error);
+      return;
+    }
+    setData(parsed);
+    setFileName(name);
+    setFileError(undefined);
+    setIsLoaded(true);
+    setCanalResults([]);
+    setCreaResults([]);
+    toast.success(`${parsed.length} registro(s) carregado(s) com sucesso.`);
+  }, []);
+
+  const handleQueryCanal = useCallback(async () => {
+    setIsQueryingCanal(true);
+    const results: QueryResult[] = data.map((r) => ({ ...r, statusCanalAcesso: "pendente" as const }));
+    setCanalResults([...results]);
+    setCanalProgress({ current: 0, total: data.length, item: "" });
+
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      results[i].statusCanalAcesso = "consultando";
+      setCanalResults([...results]);
+      setCanalProgress({ current: i, total: data.length, item: row.email });
+
+      try {
+        const res = await consultarCanalAcesso(row.email);
+        results[i].canalAcesso = res.canal;
+        results[i].statusCanalAcesso = res.status;
+      } catch {
+        results[i].statusCanalAcesso = "erro";
+      }
+      setCanalResults([...results]);
+    }
+
+    setCanalProgress({ current: data.length, total: data.length, item: "" });
+    setIsQueryingCanal(false);
+    toast.success("Consulta de Canal de Acesso finalizada.");
+  }, [data]);
+
+  const handleQueryCrea = useCallback(async () => {
+    setIsQueryingCrea(true);
+    const results: QueryResult[] = data.map((r) => ({
+      ...r,
+      statusCrea: r.conselho.trim().toUpperCase() === "CREA" ? ("pendente" as const) : ("ignorado" as const),
+    }));
+    setCreaResults([...results]);
+    const creaRows = results.filter((r) => r.statusCrea === "pendente");
+    setCreaProgress({ current: 0, total: creaRows.length, item: "" });
+
+    let done = 0;
+    for (let i = 0; i < results.length; i++) {
+      if (results[i].statusCrea !== "pendente") continue;
+
+      results[i].statusCrea = "consultando";
+      setCreaResults([...results]);
+      setCreaProgress({ current: done, total: creaRows.length, item: results[i].cpf });
+
+      try {
+        const res = await consultarCreaMG(results[i].cpf);
+        results[i].nomeCrea = res.nome_crea;
+        results[i].situacaoCrea = res.situacao_crea;
+        results[i].tituloCrea = res.titulo_crea;
+        results[i].statusCrea = res.status;
+      } catch {
+        results[i].statusCrea = "erro";
+      }
+      done++;
+      setCreaResults([...results]);
+    }
+
+    setCreaProgress({ current: creaRows.length, total: creaRows.length, item: "" });
+    setIsQueryingCrea(false);
+    toast.success("Consulta ao CREA-MG finalizada.");
+  }, [data]);
+
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b bg-card">
+        <div className="container max-w-6xl mx-auto px-4 py-4 flex items-center gap-3">
+          <div className="h-9 w-9 rounded-lg bg-primary flex items-center justify-center">
+            <FileSpreadsheet className="h-5 w-5 text-primary-foreground" />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-foreground leading-tight">Consulta de Canal de Acesso e CREA-MG</h1>
+            <p className="text-xs text-muted-foreground">Sistema de consulta automatizada</p>
+          </div>
+        </div>
+      </header>
+
+      <main className="container max-w-6xl mx-auto px-4 py-6 space-y-6">
+        {/* Upload Section */}
+        <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-xl border p-6 space-y-5">
+          <h2 className="text-base font-semibold text-foreground">1. Importar planilha de usuários</h2>
+          <FileUploadArea
+            onFileLoaded={handleFileLoaded}
+            isLoaded={isLoaded}
+            fileName={fileName}
+            error={fileError}
+          />
+
+          {isLoaded && data.length > 0 && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}>
+              <DataPreviewTable data={data} />
+            </motion.div>
+          )}
+        </motion.section>
+
+        {/* Query Buttons */}
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: isLoaded ? 1 : 0.5, y: 0 }}
+          className="bg-card rounded-xl border p-6"
+        >
+          <h2 className="text-base font-semibold text-foreground mb-4">2. Executar consultas</h2>
+          <QueryButtons
+            enabled={isLoaded && data.length > 0}
+            showCftButton={showCftButton}
+            showCauButton={showCauButton}
+            isQueryingCanal={isQueryingCanal}
+            isQueryingCrea={isQueryingCrea}
+            onQueryCanal={handleQueryCanal}
+            onQueryCrea={handleQueryCrea}
+          />
+        </motion.section>
+
+        {/* Progress */}
+        {isQueryingCanal && (
+          <QueryProgress label="Consultando Canal de Acesso..." current={canalProgress.current} total={canalProgress.total} currentItem={canalProgress.item} />
+        )}
+        {isQueryingCrea && (
+          <QueryProgress label="Consultando CREA-MG..." current={creaProgress.current} total={creaProgress.total} currentItem={creaProgress.item} />
+        )}
+
+        {/* Results */}
+        {canalResults.length > 0 && (
+          <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-card rounded-xl border p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-foreground">Resultado — Canal de Acesso</h2>
+            </div>
+            <ResultsTable data={canalResults} type="canal" />
+          </motion.section>
+        )}
+
+        {creaResults.length > 0 && (
+          <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-card rounded-xl border p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-foreground">Resultado — CREA-MG</h2>
+            </div>
+            <ResultsTable data={creaResults} type="crea" />
+          </motion.section>
+        )}
+
+        {/* Export */}
+        {(canalResults.length > 0 || creaResults.length > 0) && (
+          <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-card rounded-xl border p-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-foreground">3. Exportar resultados</h2>
+              <ExportButton canalResults={canalResults} creaResults={creaResults} />
+            </div>
+          </motion.section>
+        )}
+      </main>
     </div>
   );
 };
-
-const Index = PlaceholderIndex;
 
 export default Index;
