@@ -113,10 +113,12 @@ const Index = () => {
         results[i].etapaCrea = res.etapa;
         results[i].urlCrea = res.url_acessada;
         results[i].logsCrea = res.logs;
-      } catch (error) {
+      } catch (error: any) {
         results[i].statusCrea = "erro";
         results[i].detalheCrea = error instanceof Error ? error.message : "Falha de comunicação com o backend da automação.";
-        results[i].etapaCrea = "requisicao_frontend";
+        results[i].etapaCrea = error?.etapa || "requisicao_frontend";
+        results[i].urlCrea = error?.url_acessada;
+        results[i].logsCrea = error?.logs;
       }
 
       done++;
