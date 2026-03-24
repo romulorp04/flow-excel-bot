@@ -53,6 +53,8 @@ def consultar_crea_mg(cpf: str) -> dict:
 
         # ── 3. Preencher CPF ─────────────────────────────────
         etapa = "preencher_cpf"
+        cpf = cpf.zfill(11)
+        logs.append(f"CPF normalizado: {cpf}")
         logs.append("Aguardando campo CPF (By.ID, 'CPF')...")
         campo_cpf = wait.until(EC.presence_of_element_located((By.ID, "CPF")))
         campo_cpf.clear()
@@ -73,12 +75,21 @@ def consultar_crea_mg(cpf: str) -> dict:
             driver.execute_script("arguments[0].click();", btn)
             logs.append("✓ Click via JS executado.")
 
-        # ── 5. Aguardar tabela ───────────────────────────────
+        # ── 5. Aguardar tabela com linha útil ────────────────
         etapa = "aguardar_tabela"
-        logs.append("Aguardando tabela (table.table_datatable)...")
-        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "table.table_datatable")))
-        logs.append("✓ Tabela encontrada.")
-        time.sleep(1)
+        logs.append("Aguardando tabela com linha útil (>=5 td)...")
+
+        def _tabela_com_linha_util(driver):
+            linhas = driver.find_elements(By.CSS_SELECTOR, "table.table_datatable tbody tr")
+            for linha in linhas:
+                celulas = linha.find_elements(By.TAG_NAME, "td")
+                if len(celulas) >= 5:
+                    return True
+            return False
+
+        wait.until(_tabela_com_linha_util)
+        logs.append("✓ Tabela com linha útil encontrada.")
+        time.sleep(0.5)
 
         # ── 6. Extrair dados ─────────────────────────────────
         etapa = "extrair_dados"
