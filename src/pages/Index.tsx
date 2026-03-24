@@ -10,10 +10,11 @@ import { parseHtmlExcel, UserRow, QueryResult } from "@/lib/parseHtmlExcel";
 import { consultarCanalAcesso, consultarCreaMG } from "@/lib/apiClient";
 import { toast } from "sonner";
 import { FileSpreadsheet } from "lucide-react";
-import { BackendStatus, BackendOfflineBanner } from "@/components/BackendStatus";
+import { BackendStatus, BackendOfflineBanner, useBackendOnline } from "@/components/BackendStatus";
 import { BackendDownload } from "@/components/BackendDownload";
 
 const Index = () => {
+  const backendOnline = useBackendOnline();
   const [data, setData] = useState<UserRow[]>([]);
   const [fileName, setFileName] = useState<string>();
   const [fileError, setFileError] = useState<string>();
@@ -143,13 +144,17 @@ const Index = () => {
             <h1 className="text-lg font-bold text-foreground leading-tight">Consulta de Canal de Acesso e CREA-MG</h1>
             <p className="text-xs text-muted-foreground">Sistema de consulta automatizada</p>
           </div>
-        <BackendStatus />
+        <BackendStatus online={backendOnline} />
         </div>
       </header>
 
       <main className="container max-w-6xl mx-auto px-4 py-6 space-y-6">
-        <BackendOfflineBanner />
-        <BackendDownload />
+        {backendOnline === false && (
+          <>
+            <BackendOfflineBanner online={backendOnline} />
+            <BackendDownload />
+          </>
+        )}
         <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-xl border p-6 space-y-5">
           <h2 className="text-base font-semibold text-foreground">1. Importar planilha de usuários</h2>
           <FileUploadArea onFileLoaded={handleFileLoaded} isLoaded={isLoaded} fileName={fileName} error={fileError} />
