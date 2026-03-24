@@ -77,6 +77,7 @@ def consultar_crea_mg(cpf: str) -> dict:
         etapa = "aguardar_tabela"
         wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "table.table_datatable")))
         logs.append("Tabela principal encontrada.")
+        _screenshot(driver, "04_tabela_encontrada", logs)
 
         # Esperar a linha útil de resultado, não só a tabela vazia
         etapa = "aguardar_linhas"
