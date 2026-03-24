@@ -51,6 +51,7 @@ def consultar_crea_mg(cpf: str) -> dict:
         url_final = driver.current_url
         logs.append(f"URL final: {url_final}")
         logs.append(f"Título da página: {driver.title}")
+        _screenshot(driver, "01_pagina_aberta", logs)
 
         etapa = "preencher_cpf"
         campo_cpf = wait.until(EC.presence_of_element_located((By.ID, "CPF")))
