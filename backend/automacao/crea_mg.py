@@ -1,3 +1,4 @@
+import os
 import time
 
 from selenium.webdriver.common.by import By
@@ -5,6 +6,18 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
 from automacao.browser import criar_driver
+
+SCREENSHOT_DIR = os.path.join(os.path.dirname(__file__), "..", "screenshots")
+os.makedirs(SCREENSHOT_DIR, exist_ok=True)
+
+
+def _screenshot(driver, nome, logs):
+    try:
+        path = os.path.join(SCREENSHOT_DIR, f"{nome}.png")
+        driver.save_screenshot(path)
+        logs.append(f"📸 Screenshot salvo: {path}")
+    except Exception as e:
+        logs.append(f"⚠ Falha ao salvar screenshot '{nome}': {e}")
 
 URL_CREA = (
     "https://crea-mg.sitac.com.br/app/view/sight/externo.php"
