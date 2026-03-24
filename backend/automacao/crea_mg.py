@@ -268,44 +268,66 @@ def _encontrar_elemento(driver, timeout, seletores, logs):
     return None
 
 
-def _extrair_de_tabelas(tables, logs):
-    """Extrai nome, situação e título de tabelas da página."""
-    nome = ""
-    situacao = ""
-    titulo = ""
+def _extrair_por_cabecalhos(tables, logs):
+    """Extrai nome, situação e título mapeando cabeçalhos (th) aos índices das colunas."""
+    MAPA = {
+        "profissional": "nome",
+        "situação do registro": "situacao",
+        "situacao do registro": "situacao",
+        "títulos": "titulo",
+        "titulos": "titulo",
+        "título": "titulo",
+        "titulo": "titulo",
+    }
 
     for idx, table in enumerate(tables):
+        ths = table.find_elements(By.TAG_NAME, "th")
+        if not ths:
+            continue
+
+        headers = [th.text.strip() for th in ths]
+        headers_lower = [h.lower() for h in headers]
+        logs.append(f"Tabela {idx}: cabeçalhos = {headers}")
+
+        # Mapear índices
+        col_map = {}  # "nome"|"situacao"|"titulo" -> index
+        for i, h in enumerate(headers_lower):
+            for chave, campo in MAPA.items():
+                if chave == h and campo not in col_map:
+                    col_map[campo] = i
+
+        if not col_map:
+            logs.append(f"Tabela {idx}: nenhum cabeçalho reconhecido, pulando.")
+            continue
+
+        logs.append(f"Tabela {idx}: mapeamento = {col_map}")
+
+        # Ler linhas de dados (tr com td)
         rows = table.find_elements(By.TAG_NAME, "tr")
         for row in rows:
             cells = row.find_elements(By.TAG_NAME, "td")
+            if not cells:
+                continue
+
             texts = [c.text.strip() for c in cells]
+            logs.append(f"Primeira linha de dados: {texts}")
 
-            # Padrão rótulo | valor
-            for i, txt in enumerate(texts):
-                low = txt.lower()
-                if "nome" in low and i + 1 < len(texts) and not nome:
-                    nome = texts[i + 1]
-                    logs.append(f"✓ Nome: {nome}")
-                elif ("situação" in low or "situacao" in low) and i + 1 < len(texts) and not situacao:
-                    situacao = texts[i + 1]
-                    logs.append(f"✓ Situação: {situacao}")
-                elif ("título" in low or "titulo" in low) and i + 1 < len(texts) and not titulo:
-                    titulo = texts[i + 1]
-                    logs.append(f"✓ Título: {titulo}")
+            nome = texts[col_map["nome"]] if "nome" in col_map and col_map["nome"] < len(texts) else ""
+            situacao = texts[col_map["situacao"]] if "situacao" in col_map and col_map["situacao"] < len(texts) else ""
+            titulo = texts[col_map["titulo"]] if "titulo" in col_map and col_map["titulo"] < len(texts) else ""
 
-            # th + td
-            ths = row.find_elements(By.TAG_NAME, "th")
-            for j, th in enumerate(ths):
-                th_low = th.text.strip().lower()
-                if j < len(texts):
-                    if "nome" in th_low and not nome:
-                        nome = texts[j]
-                    elif ("situação" in th_low or "situacao" in th_low) and not situacao:
-                        situacao = texts[j]
-                    elif ("título" in th_low or "titulo" in th_low) and not titulo:
-                        titulo = texts[j]
+            if nome:
+                logs.append(f"✓ Nome: {nome}")
+            if situacao:
+                logs.append(f"✓ Situação: {situacao}")
+            if titulo:
+                logs.append(f"✓ Título: {titulo}")
 
-    return nome, situacao, titulo
+            return nome, situacao, titulo
+
+        logs.append(f"Tabela {idx}: cabeçalhos encontrados mas sem linha de dados.")
+
+    return "", "", ""
 
 
 def _erro(cpf, msg, etapa, url, logs):
